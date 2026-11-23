@@ -61,23 +61,15 @@ for (const [width, height] of [[390, 844], [320, 700], [1280, 800]]) {
     assert.equal(progressAboveTasks, true, "Progress must be directly above the task list");
     await showProgress(page);
     assert.equal(await page.locator("#progress-details").isVisible(), true);
-    assert.equal(await page.title(), "Хватит кормить задачи «завтраками». Сделано!");
+    assert.equal(await page.title(), "Сделано 2.0 — игровое выполнение задач");
     assert.equal(await page.locator('meta[property="og:title"]').getAttribute("content"),
-      "Хватит кормить задачи «завтраками». Сделано!");
+      "Сделано 2.0 — игровое выполнение задач");
     assert.match(await page.locator('meta[property="og:description"]').getAttribute("content"),
       /Меньше «потом». Больше «готово». Жми и делай!/);
-    assert.equal(await page.locator('meta[property="og:url"]').getAttribute("content"),
-      "https://safal207.github.io/todo-list/");
-    // Social crawlers must receive a stable raster OG image with a visible CTA.
-    const sharePoster = "https://safal207.github.io/todo-list/assets/share-step-1-v2.jpg";
-    assert.equal(await page.locator('meta[property="og:image"]').getAttribute("content"), sharePoster);
-    assert.equal(await page.locator('meta[property="og:image:secure_url"]').getAttribute("content"), sharePoster);
-    assert.equal(await page.locator('meta[name="twitter:image"]').getAttribute("content"), sharePoster);
-    assert.equal(await page.locator('meta[name="twitter:card"]').getAttribute("content"), "summary_large_image");
-    assert.equal(await page.locator('meta[property="og:image:type"]').getAttribute("content"), "image/jpeg");
-    assert.equal(await page.locator('meta[property="og:image:width"]').getAttribute("content"), "1200");
-    assert.equal(await page.locator('meta[property="og:image:height"]').getAttribute("content"), "630");
-    assert.match(await page.locator('meta[property="og:image:alt"]').getAttribute("content"), /ЗАПИШИ ЗАДАЧУ/);
+    // Until the new domain exists, prevent social cards from advertising the old 1.0.
+    assert.equal(await page.locator('meta[property="og:url"]').count(), 0);
+    assert.equal(await page.locator('meta[property="og:image"]').count(), 0);
+    assert.equal(await page.locator('link[rel="canonical"]').count(), 0);
     if (width === 390) {
       const posterResponse = await page.request.get(origin + "/assets/share-step-1-v2.jpg");
       assert.equal(posterResponse.status(), 200, "Poster must be published as a real file");
@@ -87,8 +79,7 @@ for (const [width, height] of [[390, 844], [320, 700], [1280, 800]]) {
       assert.equal(posterBytes.subarray(0, 2).toString("hex"), "ffd8");
       assert.ok(posterBytes.length < 500000, "Compact preview for Telegram");
     }
-    assert.equal(await page.locator('link[rel="canonical"]').getAttribute("href"),
-      "https://safal207.github.io/todo-list/");
+
     assert.equal(await page.locator("#page-heading").textContent(), "Список задач");
     assert.equal(await page.locator(".site-header .brand-icon").count(), 1);
     assert.equal(await page.locator(".mini-hero p:not(.flavor-kicker)").textContent(), "Одно дело — одна победа. Прожарим?");
@@ -153,7 +144,7 @@ for (const [width, height] of [[390, 844], [320, 700], [1280, 800]]) {
     const whatsApp = new URL(await page.locator("#share-whatsapp").getAttribute("href"));
     const referralURL = new URL(telegram.searchParams.get("url"));
     assert.equal(referralURL.search, "?r=0-1");
-    assert.equal(referralURL.pathname, "/todo-list/invite/",
+    assert.equal(referralURL.pathname, "/invite/",
       "Telegram shares must use a new canonical OG page, not the cached homepage");
     assert.match(whatsApp.searchParams.get("text"), /Твой ход!/);
     assert.ok(!telegram.toString().includes(encodeURIComponent(label)));
@@ -355,12 +346,9 @@ for (const [width, height] of [[390, 844], [320, 700], [1280, 800]]) {
     await recipient.goto(origin + "/invite/" + new URL(receiverUrl).search, { waitUntil: "networkidle" });
     await showProgress(recipient);
     assert.equal(await recipient.locator("h1").textContent(), "Твой ход. Запиши одну задачу!");
-    assert.equal(await recipient.locator('meta[property="og:url"]').getAttribute("content"),
-      "https://safal207.github.io/todo-list/invite/");
-    assert.equal(await recipient.locator('link[rel="canonical"]').getAttribute("href"),
-      "https://safal207.github.io/todo-list/invite/");
-    assert.equal(await recipient.locator('meta[property="og:image"]').getAttribute("content"),
-      "https://safal207.github.io/todo-list/assets/share-step-1-v2.jpg");
+    assert.equal(await recipient.locator('meta[property="og:url"]').count(), 0);
+    assert.equal(await recipient.locator('link[rel="canonical"]').count(), 0);
+    assert.equal(await recipient.locator('meta[property="og:image"]').count(), 0);
     assert.match(await recipient.locator("#friend-score").textContent(), /1 из 2 задач \(50%\)/);
     assert.equal(await recipient.locator("img").getAttribute("src"), "../assets/share-step-1-v2.jpg");
     // Regression: Telegram's mobile webview previously magnified the poster and
@@ -438,7 +426,7 @@ for (const [width, height] of [[390, 844], [320, 700], [1280, 800]]) {
     await page.locator("#share-progress").click();
     assert.equal(await page.locator("#share-native").isVisible(), false);
     await page.locator("#share-copy").click();
-    await page.waitForFunction(() => window.__copiedText.includes("https://safal207.github.io/todo-list/"));
+    await page.waitForFunction(url => window.__copiedText.includes(url), origin + "/invite/");
     const copiedText = await page.evaluate(() => window.__copiedText);
     assert.match(copiedText, /1 из 1 дел \(100%\)/);
     assert.match(copiedText, /\/invite\/\?r=1-1$/);

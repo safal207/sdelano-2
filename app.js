@@ -364,7 +364,7 @@ function setBreak(active) {
 }
 
 // Viral referral: share aggregate counts only, with a recipient-facing CTA.
-const SHARE_URL = "https://safal207.github.io/todo-list/invite/";
+const SHARE_URL = new URL("invite/", document.baseURI).href;
 const shareDialog = document.querySelector("#share-dialog");
 const shareClose = document.querySelector("#share-close");
 const shareNative = document.querySelector("#share-native");
