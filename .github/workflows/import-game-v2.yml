@@ -1,0 +1,102 @@
+name: Import pinned Sdelano 2.0 (one-shot, no merge)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - IMPORT_REQUEST.md
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - name: Check out destination (new repository only)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+      - name: Copy exact verified source into a new branch
+        shell: bash
+        env:
+          SOURCE_SHA: dea287e805cb62821fe25075786eee411c7d1546
+          TARGET_BRANCH: import/game-v2-2026-11-23
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "safal207/sdelano-2"
+          if [[ -n "$(git ls-remote --heads origin "$TARGET_BRANCH")" ]]; then
+            echo "Refusing to overwrite existing import branch" >&2
+            exit 1
+          fi
+          git clone --quiet --no-checkout https://github.com/safal207/todo-list.git "$RUNNER_TEMP/game-source"
+          git -C "$RUNNER_TEMP/game-source" checkout --quiet --detach "$SOURCE_SHA"
+          test "$(git -C "$RUNNER_TEMP/game-source" rev-parse HEAD)" = "$SOURCE_SHA"
+          mkdir -p "$RUNNER_TEMP/game-bootstrap"
+          cp -a docs/architecture "$RUNNER_TEMP/game-bootstrap/architecture"
+          cp -a engine-lab "$RUNNER_TEMP/game-bootstrap/engine-lab"
+          cp tests/engine-contract.test.mjs "$RUNNER_TEMP/game-bootstrap/engine-contract.test.mjs"
+          cp README.md "$RUNNER_TEMP/game-bootstrap/README.md"
+          git switch -c "$TARGET_BRANCH"
+          find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf -- {} +
+          (cd "$RUNNER_TEMP/game-source" && tar --exclude='./.git' -cf - .) | tar -xf -
+          mkdir -p docs tests
+          cp -a "$RUNNER_TEMP/game-bootstrap/architecture" docs/architecture
+          cp -a "$RUNNER_TEMP/game-bootstrap/engine-lab" .
+          cp "$RUNNER_TEMP/game-bootstrap/engine-contract.test.mjs" tests/
+          cp "$RUNNER_TEMP/game-bootstrap/README.md" README.md
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          p = Path('index.html')
+          html = p.read_text(encoding='utf-8')
+          html = re.sub(r'^\s*<link rel="canonical" href="https://safal207\.github\.io/todo-list/">\s*\n', '\n', html, flags=re.M)
+          html = re.sub(r'^\s*<meta property="og:(?:url|image(?::secure_url)?)"[^>]*>\s*\n', '\n', html, flags=re.M)
+          html = re.sub(r'^\s*<meta name="twitter:image"[^>]*>\s*\n', '\n', html, flags=re.M)
+          html = html.replace('<title>Хватит кормить задачи «завтраками». Сделано!</title>', '<title>Сделано 2.0 — игровое выполнение задач</title>')
+          p.write_text(html, encoding='utf-8')
+          workflow = Path('.github/workflows/qa-smoke.yml')
+          s = workflow.read_text(encoding='utf-8')
+          s, n = re.subn(r'      - name: Verify external mobile demo entrypoint\n.*?(?=      - name: Serve and test mobile \+ desktop\n)', '', s, flags=re.S)
+          if n != 1:
+            raise RuntimeError('Unexpected mobile preview check format: ' + str(n))
+          s = s.replace('      - ux/focus-on-tasks', '      - import/game-v2-2026-11-23')
+          s = s.replace('          node tests/cloud-integration.mjs', '          node tests/cloud-integration.mjs\n          node --test tests/engine-contract.test.mjs')
+          workflow.write_text(s, encoding='utf-8')
+          PY
+          cat > .gitignore <<'IGNORE'
+          node_modules/
+          artifacts/
+          playwright-report/
+          test-results/
+          .env
+          .env.*
+          !.env.example
+          IGNORE
+          cat >> README.md <<'README'
+
+          ## Локальный запуск перенесённой версии
+
+          Это независимая игровая 2.0 в отдельной ветке. Исходная 1.0 не изменялась.
+          Запуск: python3 -m http.server 8765 --bind 127.0.0.1.
+          QA: npm install --no-save --no-package-lock playwright@1.62.1,
+          затем npx playwright install chromium, затем node tests/game-preview.mjs,
+          node tests/focus-clock-e2e.mjs и node --test tests/engine-contract.test.mjs.
+
+          Source runtime: safal207/todo-list SHA dea287e805cb62821fe25075786eee411c7d1546.
+          Original CI: https://github.com/safal207/todo-list/actions/runs/45136182680 (3/3 PASS).
+          Архитектура: docs/architecture/bit-os-game-engine.md.
+          Нет GitHub Pages, продакшен-кошелька, миграции пользовательских данных или облачной синхронизации.
+          README
+          test "$(git hash-object assets/fox-mascot.webp)" = "$(git -C "$RUNNER_TEMP/game-source" hash-object assets/fox-mascot.webp)"
+          node --check game.js
+          node --test tests/engine-contract.test.mjs
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'feat(v2): import verified game with binary assets, tests and BitOS architecture'
+          git push origin "HEAD:refs/heads/$TARGET_BRANCH"
+          echo "Imported exact source SHA $SOURCE_SHA into $TARGET_BRANCH; no merge, no deployment."
