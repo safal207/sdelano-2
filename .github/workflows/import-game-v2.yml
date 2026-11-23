@@ -40,6 +40,7 @@ jobs:
           cp -a engine-lab "$RUNNER_TEMP/game-bootstrap/engine-lab"
           cp tests/engine-contract.test.mjs "$RUNNER_TEMP/game-bootstrap/engine-contract.test.mjs"
           cp README.md "$RUNNER_TEMP/game-bootstrap/README.md"
+          cp .github/workflows/import-game-v2.yml "$RUNNER_TEMP/game-bootstrap/import-game-v2.yml"
           git switch -c "$TARGET_BRANCH"
           find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf -- {} +
           (cd "$RUNNER_TEMP/game-source" && tar --exclude='./.git' -cf - .) | tar -xf -
@@ -67,6 +68,11 @@ jobs:
           s = s.replace('          node tests/cloud-integration.mjs', '          node tests/cloud-integration.mjs\n          node --test tests/engine-contract.test.mjs')
           workflow.write_text(s, encoding='utf-8')
           PY
+          mkdir -p ci .github/workflows
+          mv .github/workflows/qa-smoke.yml ci/qa-smoke.yml.template
+          cp "$RUNNER_TEMP/game-bootstrap/import-game-v2.yml" .github/workflows/import-game-v2.yml
+          # Do not push a new workflow with a GITHUB_TOKEN lacking workflows scope.
+          # Restore the unchanged importer; add CI via the GitHub connector later.
           cat > .gitignore <<'IGNORE'
           node_modules/
           artifacts/
