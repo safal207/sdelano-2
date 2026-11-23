@@ -41,6 +41,7 @@ export function auditWallet(wallet) {
   }
   const taskCounts = new Map(), daily = new Set(), triple = new Set();
   const focusCounts = new Map(), knownKeys = new Set(), purchaseIds = new Set();
+  const eventIds = new Map(); // Internal opaque IDs: valid task IDs can be 150 chars.
   const events = [];
   let observedXp = 0, observedGrossCoins = 0, spent = 0;
   for (let i = 0; i < wallet.grants.length; i++) {
@@ -55,6 +56,7 @@ export function auditWallet(wallet) {
     if (!match || match[2].length > 150) { issue("invalid-grant-key", i); continue; }
     if (knownKeys.has(g.key)) issue("duplicate-grant", i);
     knownKeys.add(g.key);
+    if (!eventIds.has(g.key)) eventIds.set(g.key, "grant-" + eventIds.size);
     const [_, category, id] = match;
     const kind = KIND[category], amounts = RULES[kind];
     if (g.xp !== amounts.xp || g.coins !== amounts.coins) issue("wrong-reward", i);
@@ -77,7 +79,7 @@ export function auditWallet(wallet) {
       if (count > 3) issue("focus-daily-limit", i);
     }
     events.push({
-      eventId: g.key, actorId: "shadow-local",
+      eventId: eventIds.get(g.key), actorId: "shadow-local",
       kind, occurredAt: new Date(g.at).toISOString()
     });
   }

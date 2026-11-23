@@ -60,6 +60,24 @@ test("absent and malformed wallets fail without minting or mutating values", () 
   assert.equal(auditWallet({ version: 1, grants: "not-an-array" }).status, "invalid");
   assert.equal(auditWallet({ ...wallet(), grants: [null] }).status, "mismatch");
 });
+test("max-length task identifiers are valid and never leak into shadow diagnostics", () => {
+  const id = "x".repeat(150);
+  const w = { version: 1, excludedIds: [],
+    grants: [row("task:" + id, 10, 5), row("daily:" + date, 10, 5)] };
+  const result = auditWallet(w);
+  assert.equal(result.status, "ok");
+  assert.equal(result.expectedXp, 20);
+  assert.ok(!JSON.stringify(result).includes(id), "Diagnostics must omit task IDs");
+});
+test("valid cosmetic purchase is subtracted without treating spending as lost XP", () => {
+  const w = wallet();
+  for (let n = 4; n <= 9; n++) w.grants.push(row("task:task-" + n, 10, 5));
+  w.purchases = [{ id: "scarf", coins: 50, at }];
+  const result = auditWallet(w);
+  assert.equal(result.status, "ok");
+  assert.deepEqual([result.expectedXp, result.observedXp, result.expectedCoins, result.observedCoins],
+    [120, 120, 10, 10]);
+});
 test("linear reward projection is deterministic, idempotent and actor-isolated", () => {
   const e = { eventId: "a", actorId: "owner", kind: "task.completed", occurredAt: "2026-11-23T12:00:00Z" };
   const policy = () => ({ xp: 10, coins: 5 });
