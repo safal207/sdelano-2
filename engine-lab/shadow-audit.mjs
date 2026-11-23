@@ -19,7 +19,11 @@ const own = (x, k) => Object.prototype.hasOwnProperty.call(x, k);
 const object = x => x !== null && typeof x === "object" && !Array.isArray(x);
 const positiveTime = x => Number.isSafeInteger(x) && x >= 0 && x <= 8.64e15;
 const nonNegative = x => Number.isSafeInteger(x) && x >= 0;
-const day = x => typeof x === "string" && /^\d{4}-\d{2}-\d{2}$/.test(x);
+const day = x => {
+  if (typeof x !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(x)) return false;
+  const t = Date.parse(x + "T00:00:00Z");
+  return Number.isFinite(t) && new Date(t).toISOString().slice(0, 10) === x;
+};
 
 export function auditWallet(wallet) {
   if (wallet === null || wallet === undefined) return {
@@ -42,7 +46,7 @@ export function auditWallet(wallet) {
   const taskCounts = new Map(), daily = new Set(), triple = new Set();
   const focusCounts = new Map(), knownKeys = new Set(), purchaseIds = new Set();
   const eventIds = new Map(); // Internal opaque IDs: valid task IDs can be 150 chars.
-  const events = [];
+  const events = [], earnedCoins = [];
   let observedXp = 0, observedGrossCoins = 0, spent = 0;
   for (let i = 0; i < wallet.grants.length; i++) {
     const g = wallet.grants[i];
@@ -54,11 +58,13 @@ export function auditWallet(wallet) {
     }
     const match = /^(task|daily|triple|focus):(.+)$/.exec(g.key);
     if (!match || match[2].length > 150) { issue("invalid-grant-key", i); continue; }
-    if (knownKeys.has(g.key)) issue("duplicate-grant", i);
+    const duplicate = knownKeys.has(g.key);
+    if (duplicate) issue("duplicate-grant", i);
     knownKeys.add(g.key);
     if (!eventIds.has(g.key)) eventIds.set(g.key, "grant-" + eventIds.size);
     const [_, category, id] = match;
     const kind = KIND[category], amounts = RULES[kind];
+    if (!duplicate) earnedCoins.push({ at: g.at, coins: amounts.coins });
     if (g.xp !== amounts.xp || g.coins !== amounts.coins) issue("wrong-reward", i);
     observedXp += g.xp;
     observedGrossCoins += g.coins;
@@ -87,6 +93,7 @@ export function auditWallet(wallet) {
     if (count >= 1 && !daily.has(d)) issue("missing-daily-bonus");
     if (count >= 3 && !triple.has(d)) issue("missing-triple-bonus");
   }
+  let lastPurchaseAt = -1;
   for (let i = 0; i < (wallet.purchases || []).length; i++) {
     const purchase = wallet.purchases[i];
     if (!object(purchase) || !own(SHOP, purchase.id) ||
@@ -96,7 +103,13 @@ export function auditWallet(wallet) {
       continue;
     }
     purchaseIds.add(purchase.id);
+    // Same-millisecond earnings are eligible; timestamps are diagnostic, not proof.
+    if (purchase.at < lastPurchaseAt) issue("purchase-out-of-order", i);
+    lastPurchaseAt = purchase.at;
     spent += purchase.coins;
+    const earnedAtPurchase = earnedCoins.reduce((sum, grant) =>
+      sum + (grant.at <= purchase.at ? grant.coins : 0), 0);
+    if (spent > earnedAtPurchase) issue("purchase-insufficient-at-time", i);
   }
   let projected = { xp: 0, coins: 0 };
   try {

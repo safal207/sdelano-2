@@ -34,8 +34,74 @@ async function verifyReadOnly(page) {
       first, second };
   }, walletKey);
 }
+// Isolate the diagnostic from legitimate production writes. Intercept every
+// Storage mutation method, including writes that would restore identical bytes.
+async function verifyIsolatedRuntime(width) {
+  const context = await browser.newContext({ viewport: { width, height: 844 } });
+  const page = await context.newPage(), errors = [];
+  page.on("pageerror", error => errors.push(error.message));
+  try {
+    const probe = root + "__shadow_probe__";
+    await page.route(probe, route => route.fulfill({
+      contentType: "text/html", body: "<!doctype html><title>Shadow probe</title>"
+    }));
+    await page.goto(probe);
+    const result = await page.evaluate(async key => {
+      const p = Storage.prototype;
+      const original = { setItem: p.setItem, removeItem: p.removeItem, clear: p.clear, getItem: p.getItem };
+      original.setItem.call(sessionStorage, "probe", "untouched");
+      const attempts = [];
+      for (const name of ["setItem", "removeItem", "clear"]) {
+        p[name] = function (...args) {
+          attempts.push(name);
+          return original[name].apply(this, args);
+        };
+      }
+      const snapshot = () => JSON.stringify([localStorage, sessionStorage].map(storage =>
+        Object.keys(storage).sort().map(k => [k, original.getItem.call(storage, k)])));
+      const before = snapshot();
+      const statuses = [];
+      await import("/engine-lab/shadow-runtime.mjs?v=1");
+      statuses.push(window.sdelanoShadow.inspect().status);
+      const initialUnchanged = before === snapshot();
+      const check = expected => {
+        const prior = snapshot();
+        const a = window.sdelanoShadow.refresh();
+        statuses.push(a.status);
+        if (a.status !== expected || prior !== snapshot()) throw Error("Shadow mutated storage or wrong status");
+      };
+      // Setup uses unwrapped methods; only diagnostic attempts are counted.
+      original.setItem.call(localStorage, key, "{broken JSON");
+      check("unavailable");
+      original.setItem.call(localStorage, key, JSON.stringify({ version: 1, grants: [], excludedIds: [] }));
+      check("ok");
+      p.getItem = function (k) {
+        if (this === localStorage && k === key) throw new DOMException("Denied", "SecurityError");
+        return original.getItem.call(this, k);
+      };
+      check("unavailable");
+      p.getItem = original.getItem;
+      original.setItem.call(localStorage, key, JSON.stringify({ version: 1, grants: [null], excludedIds: [] }));
+      const prior = snapshot();
+      window.dispatchEvent(new Event("sdelano:game-changed"));
+      statuses.push(window.sdelanoShadow.inspect().status);
+      const mismatchUnchanged = prior === snapshot();
+      original.removeItem.call(localStorage, key);
+      window.dispatchEvent(new StorageEvent("storage", { key: null }));
+      statuses.push(window.sdelanoShadow.inspect().status);
+      return { attempts, statuses, initialUnchanged, mismatchUnchanged };
+    }, walletKey);
+    assert.deepEqual(result.attempts, [], "SHADOW-002: zero Storage mutation attempts");
+    assert.ok(result.initialUnchanged && result.mismatchUnchanged);
+    assert.deepEqual(result.statuses, ["no-wallet", "unavailable", "ok", "unavailable", "mismatch", "no-wallet"]);
+    assert.deepEqual(errors, []);
+    console.log("BitOS shadow storage/failure isolation QA passed:", browserName, width);
+  } finally { await context.close(); }
+}
+
 try {
   for (const width of [320, 390]) {
+    await verifyIsolatedRuntime(width);
     const context = await browser.newContext({ viewport: { width, height: 844 } });
     const page = await context.newPage(), errors = [];
     page.on("pageerror", e => errors.push(e.message));
@@ -92,7 +158,14 @@ try {
       const duplicate = await sibling.evaluate(taskId => window.sdelanoGame.awardTask(taskId), id);
       assert.equal(duplicate.awarded, false);
       assert.equal((await inspect(sibling)).expectedXp, 55);
-      await sibling.close();
+      // SHADOW-001: a real commit in the original tab must update the
+      // already-open sibling via the browser storage event, without refresh().
+      await addAndComplete(page, "Шадоу четвертая задача " + width);
+      await sibling.waitForFunction(() => {
+        const a = window.sdelanoShadow.inspect();
+        return a.status === "ok" && a.expectedXp === 65 && a.expectedCoins === 35;
+      });
+      assert.equal((await inspect(page)).expectedXp, 65);
 
       const mismatch = await page.evaluate(key => {
         const raw = JSON.parse(localStorage.getItem(key));
@@ -105,8 +178,10 @@ try {
       assert.ok(mismatch.noWrite);
       assert.equal(mismatch.result.status, "mismatch");
       assert.ok(mismatch.result.issues.some(x => x.code === "wrong-reward"));
-      assert.equal(mismatch.result.expectedXp, 55);
-      assert.equal(mismatch.result.observedXp, 56);
+      assert.equal(mismatch.result.expectedXp, 65);
+      assert.equal(mismatch.result.observedXp, 66);
+      await sibling.waitForFunction(() => window.sdelanoShadow.inspect().status === "mismatch");
+      await sibling.close();
       assert.deepEqual(errors, [], "Unexpected page errors: " + errors.join("; "));
       console.log("BitOS shadow read-only QA passed:", browserName, width);
     } finally { await context.close(); }

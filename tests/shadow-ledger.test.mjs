@@ -90,3 +90,35 @@ test("linear reward projection is deterministic, idempotent and actor-isolated",
   const many = Array.from({ length: 1000 }, (_, i) => ({ ...e, eventId: "event-" + i }));
   assert.equal(projectRewards("owner", many, policy).xp, 10000);
 });
+
+test("SHADOW-004 rejects impossible calendar days but accepts leap day", () => {
+  for (const bad of ["2026-02-29", "2026-04-31", "2026-13-01", "2026-00-01"]) {
+    const w = wallet();
+    w.grants[0].day = bad;
+    assert.ok(auditWallet(w).issues.some(x => x.code === "invalid-grant"), bad);
+  }
+  const leap = "2028-02-29";
+  const w = { version: 1, excludedIds: [], grants: [
+    { ...row("task:leap", 10, 5), day: leap },
+    { ...row("daily:" + leap, 10, 5), day: leap }
+  ] };
+  assert.equal(auditWallet(w).status, "ok");
+});
+test("SHADOW-004 rejects spending future earnings, including cumulative purchases", () => {
+  const w = wallet();
+  for (let n = 4; n <= 33; n++) w.grants.push(row("task:future-" + n, 10, 5, at + 1000));
+  w.purchases = [{ id: "scarf", coins: 50, at }];
+  const before = JSON.stringify(w);
+  const a = auditWallet(w);
+  assert.equal(a.status, "mismatch");
+  assert.ok(a.issues.some(x => x.code === "purchase-insufficient-at-time"));
+  assert.equal(JSON.stringify(w), before);
+  w.purchases[0].at = at + 1000;
+  assert.equal(auditWallet(w).status, "ok", "same timestamp is permitted");
+  w.purchases.push({ id: "glasses", coins: 100, at });
+  const b = auditWallet(w);
+  assert.ok(b.issues.some(x => x.code === "purchase-out-of-order"));
+  assert.ok(b.issues.some(x => x.code === "purchase-insufficient-at-time"));
+  w.purchases[1].at = at + 1000;
+  assert.equal(auditWallet(w).status, "ok");
+});
