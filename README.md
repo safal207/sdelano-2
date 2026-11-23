@@ -15,3 +15,16 @@
 Персонаж отражает **реальные полезные действия**, а не требует внимания. Никаких автономных просьб, наказаний за отсутствие, повторной выдачи наград или игровых обязательств.
 
 Не мержить черновую ветку в `main` и не публиковать приложение без отдельного разрешения владельца.
+
+## Локальный запуск перенесённой версии
+
+Это независимая игровая 2.0 в отдельной ветке. Исходная 1.0 не изменялась.
+Запуск: python3 -m http.server 8765 --bind 127.0.0.1.
+QA: npm install --no-save --no-package-lock playwright@1.62.1,
+затем npx playwright install chromium, затем node tests/game-preview.mjs,
+node tests/focus-clock-e2e.mjs и node --test tests/engine-contract.test.mjs.
+
+Source runtime: safal207/todo-list SHA dea287e805cb62821fe25075786eee411c7d1546.
+Original CI: https://github.com/safal207/todo-list/actions/runs/45136182680 (3/3 PASS).
+Архитектура: docs/architecture/bit-os-game-engine.md.
+Нет GitHub Pages, продакшен-кошелька, миграции пользовательских данных или облачной синхронизации.
