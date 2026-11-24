@@ -42,6 +42,7 @@ on:
       - "fox-microreactions.css"
       - "invite/index.html"
       - "tests/*.mjs"
+      - "engine-lab/**"
       - ".github/workflows/qa-smoke.yml"
   push:
     branches:
@@ -85,6 +86,7 @@ on:
       - "shop.js"
       - "invite/index.html"
       - "tests/*.mjs"
+      - "engine-lab/**"
       - ".github/workflows/qa-smoke.yml"
 
 permissions:
@@ -130,6 +132,7 @@ jobs:
           node tests/fox-micro-phone-preview.mjs
           node tests/brand-flavor.mjs
           node tests/game-economy.mjs
+          node tests/shadow-mode.mjs
           node tests/game-focus.mjs
           node tests/focus-clock-e2e.mjs
           node tests/focus-pause-notification.mjs
@@ -144,6 +147,7 @@ jobs:
           node tests/cloud-sync.mjs
           node tests/cloud-integration.mjs
           node --test tests/engine-contract.test.mjs
+          node --test tests/shadow-ledger.test.mjs
       - name: Upload visual snapshots
         if: always()
         uses: actions/upload-artifact@v4
