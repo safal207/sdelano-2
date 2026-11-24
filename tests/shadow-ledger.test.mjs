@@ -122,3 +122,6 @@ test("SHADOW-004 rejects spending future earnings, including cumulative purchase
   w.purchases[1].at = at + 1000;
   assert.equal(auditWallet(w).status, "ok");
 });
+
+// Run the load regression in the existing QA smoke matrix.
+import "./engine-load.test.mjs";

@@ -39,7 +39,28 @@ export function applyEvent(previous, event, policy) {
 
 export function replay(actorId, events, policy) {
   if (!Array.isArray(events)) throw new TypeError("Events array required");
-  return events.reduce((state, event) => applyEvent(state, event, policy), emptyLedger(actorId));
+  // Bulk replay owns its state, so it need not copy the growing entries array.
+  // forEach preserves reduce's sparse-array behavior and validation order.
+  const state = emptyLedger(actorId), seen = new Set();
+  events.forEach(event => {
+    assertEvent(event);
+    if (event.actorId !== actorId) throw new Error("Actor mismatch");
+    if (typeof policy !== "function") throw new TypeError("Policy function required");
+    if (seen.has(event.eventId)) return;
+    const grant = policy(event);
+    if (!grant || !Number.isSafeInteger(grant.xp) || !Number.isSafeInteger(grant.coins) ||
+        grant.xp < 0 || grant.coins < 0 || grant.xp > 1000 || grant.coins > 1000)
+      throw new Error("Invalid policy result");
+    const xp = state.xp + grant.xp, coins = state.coins + grant.coins;
+    if (!Number.isSafeInteger(xp) || !Number.isSafeInteger(coins)) throw new Error("Ledger overflow");
+    state.entries.push({ eventId: event.eventId, kind: event.kind,
+      occurredAt: event.occurredAt, ruleVersion: grant.ruleVersion ?? "laboratory-1",
+      xp: grant.xp, coins: grant.coins });
+    seen.add(event.eventId);
+    state.xp = xp;
+    state.coins = coins;
+  });
+  return state;
 }
 
 // Fast, read-only replay for shadow diagnostics. Does not need to allocate
