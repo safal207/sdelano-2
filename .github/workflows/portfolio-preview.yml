@@ -1,0 +1,196 @@
+name: Portfolio preview and verified screenshots
+on:
+  push:
+    branches: [portfolio-preview]
+    paths: ['.github/workflows/portfolio-preview.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: sdelano-portfolio-preview
+  cancel-in-progress: false
+jobs:
+  prepare:
+    if: github.ref == 'refs/heads/portfolio-preview'
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: portfolio
+          ref: portfolio-preview
+      - uses: actions/checkout@v4
+        with:
+          ref: 698adb1f39829f99fe72a340e04c094de6de542e
+          path: source-v2
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: safal207/todo-list
+          ref: 2d44c25b170952e09e519f7e4b9d2563e368e24e
+          path: source-v1
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Browser tools
+        run: |
+          npm install --no-save --no-package-lock playwright@1.62.1
+          npx playwright install --with-deps chromium
+      - name: Recover original visual QA evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/evidence-v1" "$RUNNER_TEMP/evidence-v2"
+          gh run download 45513019512 --repo safal207/sdelano-2 --name tasks-ui-screenshots-chromium --dir "$RUNNER_TEMP/evidence-v2"
+          if ! gh run download 44907088945 --repo safal207/todo-list --name tasks-ui-screenshots-chromium --dir "$RUNNER_TEMP/evidence-v1"; then
+            (
+              cd source-v1
+              python3 -m http.server 8765 --bind 127.0.0.1 >"$RUNNER_TEMP/v1-server.log" 2>&1 &
+              server=$!
+              trap 'kill "$server" 2>/dev/null || true' EXIT
+              for i in {1..30}; do curl -fsS http://127.0.0.1:8765/ >/dev/null && break; sleep 1; done
+              SDELANO_QA_ENGINE=chromium node tests/qa-smoke.mjs
+              cp artifacts/first-win-390.png artifacts/three-steps-390.png "$RUNNER_TEMP/evidence-v1/"
+            )
+          fi
+          mkdir -p portfolio/portfolio-evidence
+          cp "$RUNNER_TEMP/evidence-v1/first-win-390.png" portfolio/portfolio-evidence/v1-first-win.png
+          cp "$RUNNER_TEMP/evidence-v1/three-steps-390.png" portfolio/portfolio-evidence/v1-achievements.png
+          cp "$RUNNER_TEMP/evidence-v2/fox-ceremony-chromium-390.png" portfolio/portfolio-evidence/v2-fox-ceremony.png
+          cp "$RUNNER_TEMP/evidence-v2/fox-shop-chromium-390.png" portfolio/portfolio-evidence/v2-shop.png
+          cp "$RUNNER_TEMP/evidence-v2/fox-phone-preview-chromium-390-master.png" portfolio/portfolio-evidence/v2-fox-preview.png
+          python3 - <<'PY'
+          import hashlib,json,pathlib
+          p=pathlib.Path('portfolio/portfolio-evidence')
+          files=[]
+          for f in sorted(p.glob('*.png')):
+              data=f.read_bytes()
+              assert data.startswith(b'\x89PNG\r\n\x1a\n')
+              assert int.from_bytes(data[16:20],'big')==390
+              files.append({'file':f.name,'sha256':hashlib.sha256(data).hexdigest(),'width':390,'height':int.from_bytes(data[20:24],'big'),'source_ref': '2d44c25b170952e09e519f7e4b9d2563e368e24e' if f.name.startswith('v1-') else '698adb1f39829f99fe72a340e04c094de6de542e'})
+          assert len(files)==5
+          (p/'sources.json').write_text(json.dumps({'v1_reference_run':44907088945,'v2_source_run':45513019512,'note':'Chromium test fixtures with synthetic tasks; fox-preview is a dedicated test-state preview, not a claim of organic progression. V1 may be recaptured at the same pinned source if cross-repository artifact access is denied.','files':files},indent=2)+'\n')
+          PY
+      - name: Build isolated static portfolio demo
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import shutil,re
+          src=Path('source-v2'); out=Path('site/app');out.mkdir(parents=True,exist_ok=True)
+          for f in src.iterdir():
+              if f.is_file() and f.suffix in ('.html','.js','.css') and not ('preview.html' in f.name and f.name!='index.html'):
+                  shutil.copy2(f,out/f.name)
+          for folder in ('assets','invite','pilot','engine-lab'):
+              shutil.copytree(src/folder,out/folder,ignore=shutil.ignore_patterns('.git','node_modules','*.zip','*.log'))
+          for p in out.rglob('*'):
+              if p.is_symlink(): raise RuntimeError('symlink '+str(p))
+              if p.is_file() and p.suffix in ('.js','.mjs','.html'):
+                  s=p.read_text()
+                  # All literal keys and lock names remain internally consistent.
+                  s=re.sub(r'todo-list\.|sdelano\.',lambda m:'preview.sdelano2.'+m.group(0),s)
+                  p.write_text(s)
+          guard="""'use strict';
+          (() => {
+            const prefix='preview.sdelano2.';
+            const proto=Storage.prototype;
+            const get=proto.getItem,set=proto.setItem,remove=proto.removeItem,key=proto.key;
+            const len=Object.getOwnPropertyDescriptor(proto,'length').get;
+            const normalize=k=>String(k).startsWith(prefix)?String(k):prefix+String(k);
+            function keys(store){const a=[];for(let i=0;i<len.call(store);i++){const k=key.call(store,i);if(k&&k.startsWith(prefix))a.push(k);}return a;}
+            Object.defineProperties(proto,{
+              getItem:{value:function(k){return get.call(this,normalize(k));},configurable:true,writable:true},
+              setItem:{value:function(k,v){return set.call(this,normalize(k),v);},configurable:true,writable:true},
+              removeItem:{value:function(k){return remove.call(this,normalize(k));},configurable:true,writable:true},
+              clear:{value:function(){for(const k of keys(this))remove.call(this,k);},configurable:true,writable:true},
+              key:{value:function(i){return keys(this)[Number(i)]??null;},configurable:true,writable:true},
+              length:{get:function(){return keys(this).length;},configurable:true}
+            });
+            addEventListener('storage',e=>{if(e.key===null||!e.key.startsWith(prefix))e.stopImmediatePropagation();},true);
+          })();
+          """
+          (out/'preview-isolation.js').write_text(guard)
+          # Cloud features are deliberately not configured, and remote connections are blocked.
+          (out/'cloud-config.js').write_text('window.SDELANO_CLOUD_CONFIG=Object.freeze({url:"",publishableKey:""});\n')
+          for p in out.rglob('*.html'):
+              s=p.read_text()
+              if '<head>' not in s: raise RuntimeError('missing head '+str(p))
+              rel='../' * (len(p.relative_to(out).parts)-1)
+              addition='<meta name="robots" content="noindex,nofollow"><meta http-equiv="Content-Security-Policy" content="connect-src self; object-src none; base-uri self">'.replace("connect-src self; object-src none; base-uri self","connect-src 'self'; object-src 'none'; base-uri 'self'")+f'<script src="{rel}preview-isolation.js"></script>'
+              s=s.replace('<head>','<head>'+addition,1)
+              if p==out/'index.html':
+                  s=s.replace('<body>','<body><aside style="padding:10px;text-align:center;background:#fff0c2;color:#39220c;font:600 13px system-ui">Сделано 2.0 — экспериментальное демо. Отдельные локальные данные; не вводите личную информацию. <a href="../">К портфолио</a></aside>',1)
+                  if 'К портфолио' not in s: raise RuntimeError('preview banner missing')
+              p.write_text(s)
+          shutil.copytree('portfolio/portfolio-evidence','site/screens')
+          Path('site/.nojekyll').touch()
+          Path('site/index.html').write_text("""<!doctype html><html lang="ru"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>Сделано — портфолио</title><style>body{max-width:960px;margin:auto;padding:24px;background:#fff7e8;color:#39220c;font:16px system-ui}h1{font-size:clamp(30px,5vw,48px)}a{color:#a13f20}a.cta{display:inline-block;background:#ad351e;color:white;padding:14px 20px;border-radius:12px;text-decoration:none;font-weight:700}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:16px}figure{margin:0;background:white;border-radius:12px;padding:8px}img{width:100%;height:auto;display:block}figcaption{padding:8px;font-size:14px}</style><h1>Сделано 1.0 → 2.0</h1><p>Реальные игровые механики. Первая победа, достижения, опыт, монеты, магазин и эволюция лисёнка.</p><p><a class="cta" href="app/">Попробовать экспериментальное 2.0</a></p><p>Демо без платежей и облачной синхронизации. Отдельные локальные данные. <a href="https://safal207.github.io/todo-list/">Стабильная 1.0</a></p><h2>1.0</h2><div class="grid"><figure><a href="screens/v1-first-win.png"><img src="screens/v1-first-win.png" alt="Первая победа"></a><figcaption>Первая победа</figcaption></figure><figure><a href="screens/v1-achievements.png"><img src="screens/v1-achievements.png" alt="Три шага"></a><figcaption>Достижения</figcaption></figure></div><h2>2.0</h2><div class="grid"><figure><a href="screens/v2-fox-ceremony.png"><img src="screens/v2-fox-ceremony.png" alt="Награда и лисёнок"></a><figcaption>Награда и лисёнок</figcaption></figure><figure><a href="screens/v2-shop.png"><img src="screens/v2-shop.png" alt="Игровой магазин"></a><figcaption>Игровой магазин</figcaption></figure><figure><a href="screens/v2-fox-preview.png"><img src="screens/v2-fox-preview.png" alt="Тестовый экран эволюции"></a><figcaption>Эволюция: тестовый экран</figcaption></figure></div><p>Скриншоты Chromium с синтетическими задачами. <a href="screens/sources.json">Происхождение кадров</a>. <a href="https://github.com/safal207/sdelano-2">Исходный код</a>.</p></html>""")
+          PY
+      - name: Verify actual game and storage separation
+        run: |
+          python3 -m http.server 8765 --bind 127.0.0.1 --directory site >"$RUNNER_TEMP/preview-server.log" 2>&1 &
+          server=$!
+          trap 'kill "$server" 2>/dev/null || true' EXIT
+          for i in {1..30}; do curl -fsS http://127.0.0.1:8765/ >/dev/null && break; sleep 1; done
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          import { chromium } from 'playwright';
+          const browser=await chromium.launch();
+          try {
+            const context=await browser.newContext({viewport:{width:390,height:844}});
+            const page=await context.newPage();
+            const errors=[];page.on('pageerror',e=>errors.push(e.message));
+            await page.goto('http://127.0.0.1:8765/');
+            await page.evaluate(()=>{localStorage.setItem('todo-list.tasks.v1','stable-v1-sentinel');localStorage.setItem('sdelano.game.v1','stable-wallet-sentinel')});
+            await page.goto('http://127.0.0.1:8765/app/',{waitUntil:'networkidle'});
+            await page.evaluate(()=>{if(document.querySelector('#welcome')?.open)document.querySelector('#welcome-start')?.click()});
+            assert.equal((await page.evaluate(()=>window.sdelanoGame.inspect())).xp,0);
+            await page.locator('#task-title').fill('Демо: первый полезный шаг');
+            await page.locator('#task-title').press('Enter');
+            await page.locator('li.task').filter({hasText:'Демо: первый полезный шаг'}).locator('.task-checkbox').check();
+            await page.locator('.task-panel[aria-busy="true"]').waitFor({state:'hidden'});
+            assert.deepEqual(await page.evaluate(()=>{const w=window.sdelanoGame.inspect();return [w.xp,w.coins]}),[20,10]);
+            await page.reload({waitUntil:'networkidle'});
+            assert.deepEqual(await page.evaluate(()=>{const w=window.sdelanoGame.inspect();return [w.xp,w.coins]}),[20,10]);
+            assert.deepEqual(errors,[]);
+            await page.goto('http://127.0.0.1:8765/');
+            const raw=await page.evaluate(()=>({tasks:localStorage.getItem('todo-list.tasks.v1'),wallet:localStorage.getItem('sdelano.game.v1'),preview:localStorage.getItem('preview.sdelano2.sdelano.game.v1')}));
+            assert.equal(raw.tasks,'stable-v1-sentinel');
+            assert.equal(raw.wallet,'stable-wallet-sentinel');
+            assert.ok(raw.preview);
+            console.log('PASS: first task, 20 XP / 10 coins, reload, stable V1 keys unchanged');
+          } finally {await browser.close();}
+          JS
+      - name: Store five verified screenshots in public preview branch
+        run: |
+          cd portfolio
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add portfolio-evidence
+          if ! git diff --cached --quiet; then
+            git commit -m "docs: publish pinned Sdelano visual QA evidence"
+            git push origin HEAD:portfolio-preview
+          fi
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+  deploy:
+    needs: prepare
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/configure-pages@v5
+        with:
+          enablement: true
+      - name: Deploy verified portfolio preview
+        id: deployment
+        uses: actions/deploy-pages@v4
