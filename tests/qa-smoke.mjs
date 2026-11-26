@@ -82,8 +82,11 @@ for (const [width, height] of [[390, 844], [320, 700], [1280, 800]]) {
 
     assert.equal(await page.locator("#page-heading").textContent(), "Список задач");
     assert.equal(await page.locator(".site-header .brand-icon").count(), 1);
-    assert.equal(await page.locator(".mini-hero p:not(.flavor-kicker)").textContent(), "Одно дело — одна победа. Прожарим?");
+    assert.equal(await page.locator(".mini-hero p:not(.flavor-kicker)").textContent(), "Начни с одного дела.");
     assert.equal(await page.locator(".flavor-kicker").textContent(), "Дела со вкусом");
+    assert.equal(await page.locator(".flavor-kicker").isVisible(), false);
+    assert.ok(await page.locator("#task-form").evaluate(el => Boolean(el.compareDocumentPosition(document.querySelector("#game-preview")) & Node.DOCUMENT_POSITION_FOLLOWING)), "Real task form comes before optional rewards");
+    assert.equal(await page.locator("#game-preview-details").isVisible(), false);
     const mascot = page.locator(".hero-mascot");
     assert.ok(await mascot.evaluate(img => img.complete && img.naturalWidth > 0), "The fox mascot image must load");
     assert.equal(await mascot.evaluate(img => getComputedStyle(img).animationName), "mascot-hello");
