@@ -66,7 +66,7 @@ window.achievementPoster = (() => {
       done === 3 ? "ТРИ ДЕЛА ГОТОВЫ!" : "ДЕЛА СДЕЛАНЫ!";
     fitText(ctx, headline, 78, 204, 510, 52, "#422618");
     fitText(ctx, String(done), 70, 371, 490, 170, "#422618");
-    fitText(ctx, "ИЗ " + total + " ЗАДАЧ", 82, 423, 485, 44, "#69412c");
+    fitText(ctx, "ИЗ " + total, 82, 423, 485, 44, "#69412c");
 
     fillRounded(ctx, 615, 160, 506, 276, 28, done > 0 ? "#e5f3bd" : "#ffedc4");
     const scale = Math.min(208 / fox.naturalWidth, 208 / fox.naturalHeight);
