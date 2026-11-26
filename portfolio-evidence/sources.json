@@ -1,0 +1,42 @@
+{
+  "v1_reference_run": 44907088945,
+  "v2_source_run": 45513019512,
+  "note": "Chromium test fixtures with synthetic tasks; fox-preview is a dedicated test-state preview, not a claim of organic progression. V1 may be recaptured at the same pinned source if cross-repository artifact access is denied.",
+  "files": [
+    {
+      "file": "v1-achievements.png",
+      "sha256": "b463c079953da1b551af7382abed7acd5f3fe000c519023d010e114677a722f0",
+      "width": 390,
+      "height": 1683,
+      "source_ref": "2d44c25b170952e09e519f7e4b9d2563e368e24e"
+    },
+    {
+      "file": "v1-first-win.png",
+      "sha256": "36008f4325234a20bbd06112249ac09ccf14cab798c3e23bd3e47210e85cc1d3",
+      "width": 390,
+      "height": 1294,
+      "source_ref": "2d44c25b170952e09e519f7e4b9d2563e368e24e"
+    },
+    {
+      "file": "v2-fox-ceremony.png",
+      "sha256": "38de989c52212f2b400c2cc4b44a174cd4f0bff9feee81fe655ce41e3adc9c10",
+      "width": 390,
+      "height": 1532,
+      "source_ref": "698adb1f39829f99fe72a340e04c094de6de542e"
+    },
+    {
+      "file": "v2-fox-preview.png",
+      "sha256": "f7db7740470ecd690a314addbc65c64c5639571e47f79a95dcb5412effbb9a84",
+      "width": 390,
+      "height": 1706,
+      "source_ref": "698adb1f39829f99fe72a340e04c094de6de542e"
+    },
+    {
+      "file": "v2-shop.png",
+      "sha256": "95de4b847eb4882327d69a30264be6cb7e97fa18a7d01f3b23a60807d84085c3",
+      "width": 390,
+      "height": 1831,
+      "source_ref": "698adb1f39829f99fe72a340e04c094de6de542e"
+    }
+  ]
+}
