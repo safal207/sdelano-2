@@ -61,9 +61,9 @@ for (const [width, height] of [[390, 844], [320, 700], [1280, 800]]) {
     assert.equal(progressAboveTasks, true, "Progress must be directly above the task list");
     await showProgress(page);
     assert.equal(await page.locator("#progress-details").isVisible(), true);
-    assert.equal(await page.title(), "Сделано 2.0 — игровое выполнение задач");
+    assert.equal(await page.title(), "Сделано! — одно дело, одна победа");
     assert.equal(await page.locator('meta[property="og:title"]').getAttribute("content"),
-      "Сделано 2.0 — игровое выполнение задач");
+      "Сделано! — одно дело, одна победа");
     assert.match(await page.locator('meta[property="og:description"]').getAttribute("content"),
       /Меньше «потом». Больше «готово». Жми и делай!/);
     // Until the new domain exists, prevent social cards from advertising the old 1.0.
@@ -82,8 +82,11 @@ for (const [width, height] of [[390, 844], [320, 700], [1280, 800]]) {
 
     assert.equal(await page.locator("#page-heading").textContent(), "Список задач");
     assert.equal(await page.locator(".site-header .brand-icon").count(), 1);
-    assert.equal(await page.locator(".mini-hero p:not(.flavor-kicker)").textContent(), "Одно дело — одна победа. Прожарим?");
+    assert.equal(await page.locator(".mini-hero p:not(.flavor-kicker)").textContent(), "Начни с одного дела.");
     assert.equal(await page.locator(".flavor-kicker").textContent(), "Дела со вкусом");
+    assert.equal(await page.locator(".flavor-kicker").isVisible(), false);
+    assert.ok(await page.locator("#task-form").evaluate(el => Boolean(el.compareDocumentPosition(document.querySelector("#game-preview")) & Node.DOCUMENT_POSITION_FOLLOWING)), "Real task form comes before optional rewards");
+    assert.equal(await page.locator("#game-preview-details").isVisible(), false);
     const mascot = page.locator(".hero-mascot");
     assert.ok(await mascot.evaluate(img => img.complete && img.naturalWidth > 0), "The fox mascot image must load");
     assert.equal(await mascot.evaluate(img => getComputedStyle(img).animationName), "mascot-hello");
@@ -212,6 +215,36 @@ for (const [width, height] of [[390, 844], [320, 700], [1280, 800]]) {
       }
     });
     assert.ok(ctaRight < 0.75, "Poster CTA clears Telegram's bottom-right timestamp");
+    const viralCards = await page.evaluate(async () => {
+      const proto = CanvasRenderingContext2D.prototype;
+      const originalText = proto.fillText;
+      const originalImage = proto.drawImage;
+      const samples = [];
+      try {
+        for (const [done, total] of [[0,1],[1,1],[3,3],[9999,9999]]) {
+          const labels = [], sources = [];
+          proto.fillText = function(text, ...args) { labels.push(String(text)); return originalText.call(this,text,...args); };
+          proto.drawImage = function(img, ...args) { sources.push(img.src); return originalImage.call(this,img,...args); };
+          const file = await window.achievementPoster.create({done,total});
+          samples.push({done,total,labels,sources,name:file.name,size:file.size});
+        }
+        return samples;
+      } finally {
+        proto.fillText = originalText;
+        proto.drawImage = originalImage;
+      }
+    });
+    for (const card of viralCards) {
+      assert.ok(card.sources.some(src => src.endsWith("/assets/fox-mascot.webp")), "Original fox is rendered in the shared image");
+      assert.ok(card.labels.includes(String(card.done)));
+      assert.ok(card.labels.includes("ИЗ " + card.total));
+      assert.ok(card.labels.includes("ЗАПИШИ ЗАДАЧУ"));
+      assert.equal(card.name, "sdelano-progress-" + card.done + "-of-" + card.total + ".jpg");
+      assert.ok(card.size > 5000 && card.size < 500000);
+    }
+    assert.ok(viralCards[0].labels.includes("НАЧНИ С ОДНОГО ДЕЛА"));
+    assert.ok(viralCards[1].labels.includes("ОДНО ДЕЛО ГОТОВО!"));
+    assert.ok(viralCards[2].labels.includes("ТРИ ДЕЛА ГОТОВЫ!"));
     assert.ok(!(await page.evaluate(async () => {
       try { await window.achievementPoster.create({ done: 2, total: 1 }); return true; }
       catch { return false; }
@@ -289,6 +322,7 @@ for (const [width, height] of [[390, 844], [320, 700], [1280, 800]]) {
     assert.notEqual(posterFull.checksum, posterZero.checksum,
       "Achievement JPG must change with real completion data");
     assert.match(posterFull.alt, /1 из 1.*100%/);
+    await page.locator("#share-poster-preview").screenshot({path:"artifacts/viral-first-win-"+width+".png"});
     const shareFull = await page.locator("#share-ready-text").inputValue();
     assert.match(shareFull, /1 из 1 дел \(100%\)\. Твой ход! Запиши задачу\./);
     assert.ok(!shareFull.includes(label), "Do not share private task title");
@@ -611,6 +645,9 @@ for (const [width, height] of [[390, 844], [320, 700], [1280, 800]]) {
       await award.screenshot({ path: "artifacts/three-steps-" + width + ".png", fullPage: true });
       await award.locator("#three-steps-share").click();
       assert.equal(await award.locator("#share-dialog").isVisible(), true);
+      await award.waitForFunction(() => document.querySelector("#share-image-download")?.download === "sdelano-progress-3-of-3.jpg");
+      await award.locator("#share-poster-preview").evaluate(img => img.decode());
+      await award.locator("#share-poster-preview").screenshot({path:"artifacts/viral-third-win-"+width+".png"});
       const awardShare = await award.locator("#share-ready-text").inputValue();
       assert.match(awardShare, /3 из 3 дел \(100%\)/);
       assert.ok(!awardShare.includes("Private QA milestone"),
@@ -867,7 +904,13 @@ try {
   assert.equal(await page.locator("li.task:visible").count(), 1);
   assert.equal(await third.evaluate(el => document.activeElement === el), true);
   assert.match(await hint.textContent(), /Готово 2 из 3/);
-  assert.equal(await page.locator("#next-step").textContent(), "Сделано!");
+  assert.equal(await page.locator("#next-step").textContent(), "Два дела готово!");
+  assert.match(await page.locator("#next-detail").textContent(), /Ты набираешь темп/);
+  assert.equal(await page.locator("#next-action[data-second-step]").isVisible(), true);
+  assert.equal(await page.locator("#first-win-card").isVisible(), false);
+  assert.equal(await page.locator("#three-steps-card").isVisible(), false);
+  assert.equal(await page.evaluate(() => localStorage.getItem("sdelano.milestone.record.v1")), "2");
+  await page.screenshot({path:"artifacts/second-win-mobile.png",fullPage:true});
   assert.equal(await page.locator("#next-action[data-completion]").isVisible(), true);
   assert.equal(await next.textContent(), "К следующему делу");
   await page.getByRole("button", { name: "Передохнуть", exact: true }).click();
@@ -877,6 +920,7 @@ try {
   await page.reload();
   await showProgress(page);
   assert.equal(await page.locator("#next-action[data-break]").isVisible(), true);
+  assert.equal(await page.locator("#next-action[data-second-step]").count(), 0);
   await next.click();
   assert.equal(await third.evaluate(el => document.activeElement === el), true);
   assert.equal(await third.isChecked(), false);
@@ -903,6 +947,20 @@ try {
   await next.click();
   assert.equal(await input.evaluate(el => document.activeElement === el), true);
   assert.equal(await page.locator("li.task").count(), 4);
+
+  // Returning to two completed tasks cannot replay the historical second-win milestone.
+  const beforeReplay = await page.evaluate(() => window.sdelanoGame.inspect());
+  for (const title of ["Fourth task", "Third task", "Second task"]) {
+    await done.click();
+    await editTask(page.getByRole("checkbox", {name:title,exact:true}), "tap");
+  }
+  await active.click();
+  await editTask(second, "tap");
+  assert.equal(await page.locator("#next-step").textContent(), "Сделано!");
+  assert.equal(await page.locator("#next-action[data-second-step]").count(), 0);
+  const afterReplay = await page.evaluate(() => window.sdelanoGame.inspect());
+  assert.deepEqual([afterReplay.xp,afterReplay.coins],[beforeReplay.xp,beforeReplay.coins]);
+  assert.equal(await page.evaluate(() => localStorage.getItem("sdelano.milestone.record.v1")), "4");
 
   // Feedback, break and the next task fit together even with a long mobile list.
   await page.evaluate(() => {

@@ -757,6 +757,7 @@ function updateProgress() {
   nextAction.hidden = !firstWinAchieved || firstWinVisible || threeStepsVisible;
   nextAction.toggleAttribute("data-completion", recentCompletion !== null);
   nextAction.toggleAttribute("data-break", onBreak);
+  nextAction.toggleAttribute("data-second-step", recentCompletion?.secondStep === true && !onBreak);
   const justCompleted = Boolean(firstWinVisible || threeStepsVisible || recentCompletion);
   if (nextBreak) nextBreak.hidden = !justCompleted;
   const pending = tasks.find((task) => !task.done);
@@ -782,9 +783,10 @@ function updateProgress() {
     nextActionButton.textContent = pending ? "Вернуться к делу" : "К списку задач";
   } else if (recentCompletion) {
     nextStep.textContent = recentCompletion.heading;
-    nextDetail.textContent = recentCompletion.elapsedMs >= 1000 ?
+    const elapsed = recentCompletion.elapsedMs >= 1000 ?
       "Дело было открыто " + clock.humanText(recentCompletion.elapsedMs) + "." :
       "Ещё одно дело готово.";
+    nextDetail.textContent = recentCompletion.secondStep ? "Ты набираешь темп. " + elapsed : elapsed;
     nextActionButton.textContent = rewardAction;
   } else if (pending) {
     nextStep.textContent = returning ? "Продолжи своё дело" : "В работе";
@@ -984,6 +986,7 @@ function toggleTask(task, row, checked, keyboardFocus) {
   const now = Date.now();
   const newFirstWin = checked && !firstWinAchieved;
   let newThreeSteps = false;
+  let newSecondStep = false;
   clearCompletion();
   if (checked) {
     clock.finish(task, now);
@@ -991,6 +994,8 @@ function toggleTask(task, row, checked, keyboardFocus) {
     const completedNow = tasks.filter((entry) => entry.done).length;
     activeFilter = completedNow < tasks.length ? "active" : "done";
     newThreeSteps = !threeStepsAchieved && completedNow >= 3;
+    // A new personal-best of two completed tasks, not an XP grant or a new stored achievement.
+    newSecondStep = firstWinAchieved && completedNow === 2 && milestoneRecord < 2;
     feedback.play("complete");
     row.classList.remove("task-celebrate");
     void row.offsetWidth;
@@ -1011,7 +1016,8 @@ function toggleTask(task, row, checked, keyboardFocus) {
     } else {
       const milestone = MILESTONE_GOALS.includes(completedNow) && completedNow > milestoneRecord;
       recentCompletion = {
-        heading: milestone ? completedNow + " дел сделано!" : "Сделано!",
+        heading: newSecondStep ? "Два дела готово!" : milestone ? completedNow + " дел сделано!" : "Сделано!",
+        secondStep: newSecondStep,
         elapsedMs: task.elapsedMs
       };
     }
@@ -1026,7 +1032,7 @@ function toggleTask(task, row, checked, keyboardFocus) {
   if (checked && persisted) window.sdelanoGame?.awardTask(task.id, now);
   recordTaskActivity(task.done ? "done" : "reopen");
   updateProgress();
-  if (newFirstWin || newThreeSteps) setProgressExpanded(true);
+  if (newFirstWin || newSecondStep || newThreeSteps) setProgressExpanded(true);
   updateList();
   if (task.done) {
     focusAfterRemoval(list.querySelector(".task-checkbox:not(:checked)"));

@@ -343,3 +343,45 @@ body {
   .add-button, .game-shop-action, .task, .game-resource { transition: none !important; }
   .add-button:active { transform: none; }
 }
+
+/* Mobile first-win hierarchy: one real task first, rewards second. */
+.mini-hero .flavor-kicker { display: none; }
+.mini-hero { min-height: 5rem; background: #ffedc4; box-shadow: none; }
+.mini-hero::before { content: none; }
+.mini-hero p:not(.flavor-kicker) { font-weight: 650; }
+#game-preview { margin-block: 1rem; }
+#first-win-title, #three-steps-title { line-height: 1.2; text-wrap: balance; }
+#first-win-card, #three-steps-card { position: relative; }
+#first-win-title { padding-inline-end: 3rem; min-height: 2.6rem; }
+#first-win-card::after {
+  content: ""; position: absolute; inset-block-start: .65rem; inset-inline-end: .65rem;
+  width: 2.8rem; height: 2.8rem; pointer-events: none;
+  background: url("assets/fox-mascot.webp") center / contain no-repeat;
+}
+#first-win-next, #three-steps-next { min-height: 44px; }
+#first-win-share, #three-steps-share { min-height: 44px; }
+
+/* First Three Wins: distinct milestone emphasis without new panels or motion. */
+#next-action[data-second-step] { position: relative; }
+#next-action[data-second-step] #next-step {
+  padding-inline-end: 3rem;
+  min-height: 2.8rem;
+  display: flex;
+  align-items: center;
+}
+#next-action[data-second-step]::after,
+#three-steps-card::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+  background: url("assets/fox-mascot.webp") center / contain no-repeat;
+}
+#next-action[data-second-step]::after {
+  inset-block-start: .65rem; inset-inline-end: .65rem;
+  width: 2.8rem; height: 2.8rem;
+}
+#three-steps-card::after {
+  inset-block-start: 2.2rem; inset-inline-end: 1rem;
+  width: clamp(3.5rem, 16vw, 5.5rem); height: clamp(3.5rem, 16vw, 5.5rem);
+}
+#three-steps-card .three-steps-number { padding-inline-end: 6rem; }
