@@ -904,7 +904,13 @@ try {
   assert.equal(await page.locator("li.task:visible").count(), 1);
   assert.equal(await third.evaluate(el => document.activeElement === el), true);
   assert.match(await hint.textContent(), /Готово 2 из 3/);
-  assert.equal(await page.locator("#next-step").textContent(), "Сделано!");
+  assert.equal(await page.locator("#next-step").textContent(), "Два дела готово!");
+  assert.match(await page.locator("#next-detail").textContent(), /Ты набираешь темп/);
+  assert.equal(await page.locator("#next-action[data-second-step]").isVisible(), true);
+  assert.equal(await page.locator("#first-win-card").isVisible(), false);
+  assert.equal(await page.locator("#three-steps-card").isVisible(), false);
+  assert.equal(await page.evaluate(() => localStorage.getItem("sdelano.milestone.record.v1")), "2");
+  await page.screenshot({path:"artifacts/second-win-mobile.png",fullPage:true});
   assert.equal(await page.locator("#next-action[data-completion]").isVisible(), true);
   assert.equal(await next.textContent(), "К следующему делу");
   await page.getByRole("button", { name: "Передохнуть", exact: true }).click();
@@ -914,6 +920,7 @@ try {
   await page.reload();
   await showProgress(page);
   assert.equal(await page.locator("#next-action[data-break]").isVisible(), true);
+  assert.equal(await page.locator("#next-action[data-second-step]").count(), 0);
   await next.click();
   assert.equal(await third.evaluate(el => document.activeElement === el), true);
   assert.equal(await third.isChecked(), false);
@@ -940,6 +947,20 @@ try {
   await next.click();
   assert.equal(await input.evaluate(el => document.activeElement === el), true);
   assert.equal(await page.locator("li.task").count(), 4);
+
+  // Returning to two completed tasks cannot replay the historical second-win milestone.
+  const beforeReplay = await page.evaluate(() => window.sdelanoGame.inspect());
+  for (const title of ["Fourth task", "Third task", "Second task"]) {
+    await done.click();
+    await editTask(page.getByRole("checkbox", {name:title,exact:true}), "tap");
+  }
+  await active.click();
+  await editTask(second, "tap");
+  assert.equal(await page.locator("#next-step").textContent(), "Сделано!");
+  assert.equal(await page.locator("#next-action[data-second-step]").count(), 0);
+  const afterReplay = await page.evaluate(() => window.sdelanoGame.inspect());
+  assert.deepEqual([afterReplay.xp,afterReplay.coins],[beforeReplay.xp,beforeReplay.coins]);
+  assert.equal(await page.evaluate(() => localStorage.getItem("sdelano.milestone.record.v1")), "4");
 
   // Feedback, break and the next task fit together even with a long mobile list.
   await page.evaluate(() => {
