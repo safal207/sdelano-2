@@ -237,7 +237,7 @@ for (const [width, height] of [[390, 844], [320, 700], [1280, 800]]) {
     for (const card of viralCards) {
       assert.ok(card.sources.some(src => src.endsWith("/assets/fox-mascot.webp")), "Original fox is rendered in the shared image");
       assert.ok(card.labels.includes(String(card.done)));
-      assert.ok(card.labels.includes("ИЗ " + card.total + " ЗАДАЧ"));
+      assert.ok(card.labels.includes("ИЗ " + card.total));
       assert.ok(card.labels.includes("ЗАПИШИ ЗАДАЧУ"));
       assert.equal(card.name, "sdelano-progress-" + card.done + "-of-" + card.total + ".jpg");
       assert.ok(card.size > 5000 && card.size < 500000);
