@@ -343,3 +343,20 @@ body {
   .add-button, .game-shop-action, .task, .game-resource { transition: none !important; }
   .add-button:active { transform: none; }
 }
+
+/* Mobile first-win hierarchy: one real task first, rewards second. */
+.mini-hero .flavor-kicker { display: none; }
+.mini-hero { min-height: 5rem; background: #ffedc4; box-shadow: none; }
+.mini-hero::before { content: none; }
+.mini-hero p:not(.flavor-kicker) { font-weight: 650; }
+#game-preview { margin-block: 1rem; }
+#first-win-title, #three-steps-title { line-height: 1.2; text-wrap: balance; }
+#first-win-card, #three-steps-card { position: relative; }
+#first-win-title { padding-inline-end: 3rem; min-height: 2.6rem; }
+#first-win-card::after {
+  content: ""; position: absolute; inset-block-start: .65rem; inset-inline-end: .65rem;
+  width: 2.8rem; height: 2.8rem; pointer-events: none;
+  background: url("assets/fox-mascot.webp") center / contain no-repeat;
+}
+#first-win-next, #three-steps-next { min-height: 44px; }
+#first-win-share, #three-steps-share { min-height: 44px; }
