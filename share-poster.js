@@ -30,7 +30,7 @@ window.achievementPoster = (() => {
       size -= 2;
     } while (size > 38);
     ctx.fillStyle = color;
-    ctx.fillText(text, x, baseline);
+    ctx.fillText(text, x, baseline, maxWidth);
   }
 
   async function create({ done, total } = {}) {
@@ -64,7 +64,7 @@ window.achievementPoster = (() => {
     const headline = done === 0 ? "НАЧНИ С ОДНОГО ДЕЛА" :
       done === 1 ? "ОДНО ДЕЛО ГОТОВО!" :
       done === 3 ? "ТРИ ДЕЛА ГОТОВЫ!" : "ДЕЛА СДЕЛАНЫ!";
-    fitText(ctx, headline, 78, 204, 705, 52, "#422618");
+    fitText(ctx, headline, 78, 204, 510, 52, "#422618");
     fitText(ctx, String(done), 70, 371, 490, 170, "#422618");
     fitText(ctx, "ИЗ " + total + " ЗАДАЧ", 82, 423, 485, 44, "#69412c");
 
