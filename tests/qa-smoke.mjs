@@ -61,9 +61,9 @@ for (const [width, height] of [[390, 844], [320, 700], [1280, 800]]) {
     assert.equal(progressAboveTasks, true, "Progress must be directly above the task list");
     await showProgress(page);
     assert.equal(await page.locator("#progress-details").isVisible(), true);
-    assert.equal(await page.title(), "Сделано 2.0 — игровое выполнение задач");
+    assert.equal(await page.title(), "Сделано! — одно дело, одна победа");
     assert.equal(await page.locator('meta[property="og:title"]').getAttribute("content"),
-      "Сделано 2.0 — игровое выполнение задач");
+      "Сделано! — одно дело, одна победа");
     assert.match(await page.locator('meta[property="og:description"]').getAttribute("content"),
       /Меньше «потом». Больше «готово». Жми и делай!/);
     // Until the new domain exists, prevent social cards from advertising the old 1.0.
