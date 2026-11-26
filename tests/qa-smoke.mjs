@@ -215,6 +215,36 @@ for (const [width, height] of [[390, 844], [320, 700], [1280, 800]]) {
       }
     });
     assert.ok(ctaRight < 0.75, "Poster CTA clears Telegram's bottom-right timestamp");
+    const viralCards = await page.evaluate(async () => {
+      const proto = CanvasRenderingContext2D.prototype;
+      const originalText = proto.fillText;
+      const originalImage = proto.drawImage;
+      const samples = [];
+      try {
+        for (const [done, total] of [[0,1],[1,1],[3,3],[9999,9999]]) {
+          const labels = [], sources = [];
+          proto.fillText = function(text, ...args) { labels.push(String(text)); return originalText.call(this,text,...args); };
+          proto.drawImage = function(img, ...args) { sources.push(img.src); return originalImage.call(this,img,...args); };
+          const file = await window.achievementPoster.create({done,total});
+          samples.push({done,total,labels,sources,name:file.name,size:file.size});
+        }
+        return samples;
+      } finally {
+        proto.fillText = originalText;
+        proto.drawImage = originalImage;
+      }
+    });
+    for (const card of viralCards) {
+      assert.ok(card.sources.some(src => src.endsWith("/assets/fox-mascot.webp")), "Original fox is rendered in the shared image");
+      assert.ok(card.labels.includes(String(card.done)));
+      assert.ok(card.labels.includes("ИЗ " + card.total + " ЗАДАЧ"));
+      assert.ok(card.labels.includes("ЗАПИШИ ЗАДАЧУ"));
+      assert.equal(card.name, "sdelano-progress-" + card.done + "-of-" + card.total + ".jpg");
+      assert.ok(card.size > 5000 && card.size < 500000);
+    }
+    assert.ok(viralCards[0].labels.includes("НАЧНИ С ОДНОГО ДЕЛА"));
+    assert.ok(viralCards[1].labels.includes("ОДНО ДЕЛО ГОТОВО!"));
+    assert.ok(viralCards[2].labels.includes("ТРИ ДЕЛА ГОТОВЫ!"));
     assert.ok(!(await page.evaluate(async () => {
       try { await window.achievementPoster.create({ done: 2, total: 1 }); return true; }
       catch { return false; }
