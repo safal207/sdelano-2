@@ -36,6 +36,9 @@ export function matchOpportunity(product, intent, context, policy) {
   const no = reason => ({kind:"none",actionId:null,reason,constraintsChecked:[]});
   if (!PRODUCTS.includes(product) || intent?.status !== "stated" ||
       !known(product,intent.category)) return no("no_current_intent");
+  const verifiedIntent = discoverIntent(product,context);
+  if (verifiedIntent.status !== "stated" || verifiedIntent.category !== intent.category)
+    return no("no_current_intent");
   if (!object(context) || !time(context.now) || !object(policy) ||
       !Array.isArray(policy.catalog) || policy.catalog.length > 10000 ||
       !Array.isArray(policy.availableActions)) return no("invalid_policy");
@@ -58,7 +61,7 @@ export function matchOpportunity(product, intent, context, policy) {
         item.available !== true || !time(item.verifiedAt) ||
         !time(item.validUntil) || item.verifiedAt > context.now ||
         item.validUntil <= context.now || !policy.availableActions.includes(item.id) ||
-        !safeInt(item.relevance) || item.relevance > 100) continue;
+        !safeInt(item.relevance) || item.relevance < 1 || item.relevance > 100) continue;
     if (commercial && (!money(item.price) ||
         !["additional","replacement","standalone"].includes(item.offerType) ||
         (context.budget != null && (item.price.currency !== context.budget.currency ||
