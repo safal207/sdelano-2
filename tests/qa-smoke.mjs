@@ -322,6 +322,7 @@ for (const [width, height] of [[390, 844], [320, 700], [1280, 800]]) {
     assert.notEqual(posterFull.checksum, posterZero.checksum,
       "Achievement JPG must change with real completion data");
     assert.match(posterFull.alt, /1 из 1.*100%/);
+    await page.locator("#share-poster-preview").screenshot({path:"artifacts/viral-first-win-"+width+".png"});
     const shareFull = await page.locator("#share-ready-text").inputValue();
     assert.match(shareFull, /1 из 1 дел \(100%\)\. Твой ход! Запиши задачу\./);
     assert.ok(!shareFull.includes(label), "Do not share private task title");
@@ -644,6 +645,9 @@ for (const [width, height] of [[390, 844], [320, 700], [1280, 800]]) {
       await award.screenshot({ path: "artifacts/three-steps-" + width + ".png", fullPage: true });
       await award.locator("#three-steps-share").click();
       assert.equal(await award.locator("#share-dialog").isVisible(), true);
+      await award.waitForFunction(() => document.querySelector("#share-image-download")?.download === "sdelano-progress-3-of-3.jpg");
+      await award.locator("#share-poster-preview").evaluate(img => img.decode());
+      await award.locator("#share-poster-preview").screenshot({path:"artifacts/viral-third-win-"+width+".png"});
       const awardShare = await award.locator("#share-ready-text").inputValue();
       assert.match(awardShare, /3 из 3 дел \(100%\)/);
       assert.ok(!awardShare.includes("Private QA milestone"),
